@@ -1,0 +1,280 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>SystemController.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">sentinel-dashboard</a> &gt; <a href="index.source.html" class="el_package">com.alibaba.csp.sentinel.dashboard.controller</a> &gt; <span class="el_source">SystemController.java</span></div><h1>SystemController.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 1999-2018 Alibaba Group Holding Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package com.alibaba.csp.sentinel.dashboard.controller;
+
+import java.util.Date;
+import java.util.List;
+
+import javax.servlet.http.HttpServletRequest;
+
+import com.alibaba.csp.sentinel.dashboard.auth.AuthService;
+import com.alibaba.csp.sentinel.dashboard.auth.AuthService.AuthUser;
+import com.alibaba.csp.sentinel.dashboard.auth.AuthService.PrivilegeType;
+import com.alibaba.csp.sentinel.dashboard.datasource.entity.rule.DegradeRuleEntity;
+import com.alibaba.csp.sentinel.dashboard.repository.rule.RuleRepository;
+import com.alibaba.csp.sentinel.dashboard.rule.DynamicRuleProvider;
+import com.alibaba.csp.sentinel.dashboard.rule.DynamicRulePublisher;
+import com.alibaba.csp.sentinel.util.StringUtil;
+
+import com.alibaba.csp.sentinel.dashboard.datasource.entity.rule.SystemRuleEntity;
+import com.alibaba.csp.sentinel.dashboard.discovery.MachineInfo;
+import com.alibaba.csp.sentinel.dashboard.client.SentinelApiClient;
+import com.alibaba.csp.sentinel.dashboard.domain.Result;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+/**
+ * @author leyou(lihao)
+ */
+@RestController
+@RequestMapping(&quot;/system&quot;)
+<span class="nc" id="L50">public class SystemController {</span>
+
+<span class="nc" id="L52">    private final Logger logger = LoggerFactory.getLogger(SystemController.class);</span>
+
+    @Autowired
+    private RuleRepository&lt;SystemRuleEntity, Long&gt; repository;
+    @Autowired
+    private SentinelApiClient sentinelApiClient;
+    @Autowired
+    private AuthService&lt;HttpServletRequest&gt; authService;
+    @Autowired
+    @Qualifier(&quot;systemRuleNacosProvider&quot;)
+    private DynamicRuleProvider&lt;List&lt;SystemRuleEntity&gt;&gt; ruleProvider;
+
+    @Autowired
+    @Qualifier(&quot;systemRuleNacosPublisher&quot;)
+    private DynamicRulePublisher&lt;List&lt;SystemRuleEntity&gt;&gt; rulePublisher;
+
+    private &lt;R&gt; Result&lt;R&gt; checkBasicParams(String app, String ip, Integer port) {
+<span class="nc bnc" id="L69" title="All 2 branches missed.">        if (StringUtil.isEmpty(app)) {</span>
+<span class="nc" id="L70">            return Result.ofFail(-1, &quot;app can't be null or empty&quot;);</span>
+        }
+<span class="nc bnc" id="L72" title="All 2 branches missed.">        if (StringUtil.isEmpty(ip)) {</span>
+<span class="nc" id="L73">            return Result.ofFail(-1, &quot;ip can't be null or empty&quot;);</span>
+        }
+<span class="nc bnc" id="L75" title="All 2 branches missed.">        if (port == null) {</span>
+<span class="nc" id="L76">            return Result.ofFail(-1, &quot;port can't be null&quot;);</span>
+        }
+<span class="nc bnc" id="L78" title="All 4 branches missed.">        if (port &lt;= 0 || port &gt; 65535) {</span>
+<span class="nc" id="L79">            return Result.ofFail(-1, &quot;port should be in (0, 65535)&quot;);</span>
+        }
+<span class="nc" id="L81">        return null;</span>
+    }
+
+    @GetMapping(&quot;/rules.json&quot;)
+    public Result&lt;List&lt;SystemRuleEntity&gt;&gt; apiQueryMachineRules(HttpServletRequest request, String app, String ip,
+                                                               Integer port) {
+<span class="nc" id="L87">        AuthUser authUser = authService.getAuthUser(request);</span>
+<span class="nc" id="L88">        authUser.authTarget(app, PrivilegeType.READ_RULE);</span>
+
+<span class="nc" id="L90">        Result&lt;List&lt;SystemRuleEntity&gt;&gt; checkResult = checkBasicParams(app, ip, port);</span>
+<span class="nc bnc" id="L91" title="All 2 branches missed.">        if (checkResult != null) {</span>
+<span class="nc" id="L92">            return checkResult;</span>
+        }
+        try {
+//            List&lt;SystemRuleEntity&gt; rules = sentinelApiClient.fetchSystemRuleOfMachine(app, ip, port);
+            //从nacos拉取规则
+<span class="nc" id="L97">            List&lt;SystemRuleEntity&gt; rules = ruleProvider.getRules(app);</span>
+<span class="nc" id="L98">            rules = repository.saveAll(rules);</span>
+<span class="nc" id="L99">            return Result.ofSuccess(rules);</span>
+<span class="nc" id="L100">        } catch (Throwable throwable) {</span>
+<span class="nc" id="L101">            logger.error(&quot;Query machine system rules error&quot;, throwable);</span>
+<span class="nc" id="L102">            return Result.ofThrowable(-1, throwable);</span>
+        }
+    }
+
+    private int countNotNullAndNotNegative(Number... values) {
+<span class="nc" id="L107">        int notNullCount = 0;</span>
+<span class="nc bnc" id="L108" title="All 2 branches missed.">        for (int i = 0; i &lt; values.length; i++) {</span>
+<span class="nc bnc" id="L109" title="All 4 branches missed.">            if (values[i] != null &amp;&amp; values[i].doubleValue() &gt;= 0) {</span>
+<span class="nc" id="L110">                notNullCount++;</span>
+            }
+        }
+<span class="nc" id="L113">        return notNullCount;</span>
+    }
+
+    @RequestMapping(&quot;/new.json&quot;)
+    public Result&lt;SystemRuleEntity&gt; apiAdd(HttpServletRequest request, String app, String ip, Integer port,
+                                           Double highestSystemLoad, Double highestCpuUsage, Long avgRt,
+                                           Long maxThread, Double qps) {
+<span class="nc" id="L120">        AuthUser authUser = authService.getAuthUser(request);</span>
+<span class="nc" id="L121">        authUser.authTarget(app, PrivilegeType.WRITE_RULE);</span>
+
+<span class="nc" id="L123">        Result&lt;SystemRuleEntity&gt; checkResult = checkBasicParams(app, ip, port);</span>
+<span class="nc bnc" id="L124" title="All 2 branches missed.">        if (checkResult != null) {</span>
+<span class="nc" id="L125">            return checkResult;</span>
+        }
+
+<span class="nc" id="L128">        int notNullCount = countNotNullAndNotNegative(highestSystemLoad, avgRt, maxThread, qps, highestCpuUsage);</span>
+<span class="nc bnc" id="L129" title="All 2 branches missed.">        if (notNullCount != 1) {</span>
+<span class="nc" id="L130">            return Result.ofFail(-1, &quot;only one of [highestSystemLoad, avgRt, maxThread, qps,highestCpuUsage] &quot;</span>
+                + &quot;value must be set &gt; 0, but &quot; + notNullCount + &quot; values get&quot;);
+        }
+<span class="nc bnc" id="L133" title="All 4 branches missed.">        if (null != highestCpuUsage &amp;&amp; highestCpuUsage &gt; 1) {</span>
+<span class="nc" id="L134">            return Result.ofFail(-1, &quot;highestCpuUsage must between [0.0, 1.0]&quot;);</span>
+        }
+<span class="nc" id="L136">        SystemRuleEntity entity = new SystemRuleEntity();</span>
+<span class="nc" id="L137">        entity.setApp(app.trim());</span>
+<span class="nc" id="L138">        entity.setIp(ip.trim());</span>
+<span class="nc" id="L139">        entity.setPort(port);</span>
+        // -1 is a fake value
+<span class="nc bnc" id="L141" title="All 2 branches missed.">        if (null != highestSystemLoad) {</span>
+<span class="nc" id="L142">            entity.setHighestSystemLoad(highestSystemLoad);</span>
+        } else {
+<span class="nc" id="L144">            entity.setHighestSystemLoad(-1D);</span>
+        }
+
+<span class="nc bnc" id="L147" title="All 2 branches missed.">        if (null != highestCpuUsage) {</span>
+<span class="nc" id="L148">            entity.setHighestCpuUsage(highestCpuUsage);</span>
+        } else {
+<span class="nc" id="L150">            entity.setHighestCpuUsage(-1D);</span>
+        }
+
+<span class="nc bnc" id="L153" title="All 2 branches missed.">        if (avgRt != null) {</span>
+<span class="nc" id="L154">            entity.setAvgRt(avgRt);</span>
+        } else {
+<span class="nc" id="L156">            entity.setAvgRt(-1L);</span>
+        }
+<span class="nc bnc" id="L158" title="All 2 branches missed.">        if (maxThread != null) {</span>
+<span class="nc" id="L159">            entity.setMaxThread(maxThread);</span>
+        } else {
+<span class="nc" id="L161">            entity.setMaxThread(-1L);</span>
+        }
+<span class="nc bnc" id="L163" title="All 2 branches missed.">        if (qps != null) {</span>
+<span class="nc" id="L164">            entity.setQps(qps);</span>
+        } else {
+<span class="nc" id="L166">            entity.setQps(-1D);</span>
+        }
+<span class="nc" id="L168">        Date date = new Date();</span>
+<span class="nc" id="L169">        entity.setGmtCreate(date);</span>
+<span class="nc" id="L170">        entity.setGmtModified(date);</span>
+        try {
+<span class="nc" id="L172">            entity = repository.save(entity);</span>
+<span class="nc" id="L173">        } catch (Throwable throwable) {</span>
+<span class="nc" id="L174">            logger.error(&quot;Add SystemRule error&quot;, throwable);</span>
+<span class="nc" id="L175">            return Result.ofThrowable(-1, throwable);</span>
+<span class="nc" id="L176">        }</span>
+<span class="nc bnc" id="L177" title="All 2 branches missed.">        if (!publishRules(app, ip, port)) {</span>
+<span class="nc" id="L178">            logger.warn(&quot;Publish system rules fail after rule add&quot;);</span>
+        }
+<span class="nc" id="L180">        return Result.ofSuccess(entity);</span>
+    }
+
+    @GetMapping(&quot;/save.json&quot;)
+    public Result&lt;SystemRuleEntity&gt; apiUpdateIfNotNull(HttpServletRequest request,
+                                        Long id, String app, Double highestSystemLoad, Double highestCpuUsage,
+                                        Long avgRt, Long maxThread, Double qps) {
+<span class="nc" id="L187">        AuthUser authUser = authService.getAuthUser(request);</span>
+<span class="nc bnc" id="L188" title="All 2 branches missed.">        if (id == null) {</span>
+<span class="nc" id="L189">            return Result.ofFail(-1, &quot;id can't be null&quot;);</span>
+        }
+<span class="nc" id="L191">        SystemRuleEntity entity = repository.findById(id);</span>
+<span class="nc bnc" id="L192" title="All 2 branches missed.">        if (entity == null) {</span>
+<span class="nc" id="L193">            return Result.ofFail(-1, &quot;id &quot; + id + &quot; dose not exist&quot;);</span>
+        }
+<span class="nc" id="L195">        authUser.authTarget(entity.getApp(), PrivilegeType.WRITE_RULE);</span>
+<span class="nc bnc" id="L196" title="All 2 branches missed.">        if (StringUtil.isNotBlank(app)) {</span>
+<span class="nc" id="L197">            entity.setApp(app.trim());</span>
+        }
+<span class="nc bnc" id="L199" title="All 2 branches missed.">        if (highestSystemLoad != null) {</span>
+<span class="nc bnc" id="L200" title="All 2 branches missed.">            if (highestSystemLoad &lt; 0) {</span>
+<span class="nc" id="L201">                return Result.ofFail(-1, &quot;highestSystemLoad must &gt;= 0&quot;);</span>
+            }
+<span class="nc" id="L203">            entity.setHighestSystemLoad(highestSystemLoad);</span>
+        }
+<span class="nc bnc" id="L205" title="All 2 branches missed.">        if (highestCpuUsage != null) {</span>
+<span class="nc bnc" id="L206" title="All 2 branches missed.">            if (highestCpuUsage &lt; 0) {</span>
+<span class="nc" id="L207">                return Result.ofFail(-1, &quot;highestCpuUsage must &gt;= 0&quot;);</span>
+            }
+<span class="nc bnc" id="L209" title="All 2 branches missed.">            if (highestCpuUsage &gt; 1) {</span>
+<span class="nc" id="L210">                return Result.ofFail(-1, &quot;highestCpuUsage must &lt;= 1&quot;);</span>
+            }
+<span class="nc" id="L212">            entity.setHighestCpuUsage(highestCpuUsage);</span>
+        }
+<span class="nc bnc" id="L214" title="All 2 branches missed.">        if (avgRt != null) {</span>
+<span class="nc bnc" id="L215" title="All 2 branches missed.">            if (avgRt &lt; 0) {</span>
+<span class="nc" id="L216">                return Result.ofFail(-1, &quot;avgRt must &gt;= 0&quot;);</span>
+            }
+<span class="nc" id="L218">            entity.setAvgRt(avgRt);</span>
+        }
+<span class="nc bnc" id="L220" title="All 2 branches missed.">        if (maxThread != null) {</span>
+<span class="nc bnc" id="L221" title="All 2 branches missed.">            if (maxThread &lt; 0) {</span>
+<span class="nc" id="L222">                return Result.ofFail(-1, &quot;maxThread must &gt;= 0&quot;);</span>
+            }
+<span class="nc" id="L224">            entity.setMaxThread(maxThread);</span>
+        }
+<span class="nc bnc" id="L226" title="All 2 branches missed.">        if (qps != null) {</span>
+<span class="nc bnc" id="L227" title="All 2 branches missed.">            if (qps &lt; 0) {</span>
+<span class="nc" id="L228">                return Result.ofFail(-1, &quot;qps must &gt;= 0&quot;);</span>
+            }
+<span class="nc" id="L230">            entity.setQps(qps);</span>
+        }
+<span class="nc" id="L232">        Date date = new Date();</span>
+<span class="nc" id="L233">        entity.setGmtModified(date);</span>
+        try {
+<span class="nc" id="L235">            entity = repository.save(entity);</span>
+<span class="nc" id="L236">        } catch (Throwable throwable) {</span>
+<span class="nc" id="L237">            logger.error(&quot;save error:&quot;, throwable);</span>
+<span class="nc" id="L238">            return Result.ofThrowable(-1, throwable);</span>
+<span class="nc" id="L239">        }</span>
+<span class="nc bnc" id="L240" title="All 2 branches missed.">        if (!publishRules(entity.getApp(), entity.getIp(), entity.getPort())) {</span>
+<span class="nc" id="L241">            logger.info(&quot;publish system rules fail after rule update&quot;);</span>
+        }
+<span class="nc" id="L243">        return Result.ofSuccess(entity);</span>
+    }
+
+    @RequestMapping(&quot;/delete.json&quot;)
+    public Result&lt;?&gt; delete(HttpServletRequest request, Long id) {
+<span class="nc" id="L248">        AuthUser authUser = authService.getAuthUser(request);</span>
+<span class="nc bnc" id="L249" title="All 2 branches missed.">        if (id == null) {</span>
+<span class="nc" id="L250">            return Result.ofFail(-1, &quot;id can't be null&quot;);</span>
+        }
+<span class="nc" id="L252">        SystemRuleEntity oldEntity = repository.findById(id);</span>
+<span class="nc bnc" id="L253" title="All 2 branches missed.">        if (oldEntity == null) {</span>
+<span class="nc" id="L254">            return Result.ofSuccess(null);</span>
+        }
+<span class="nc" id="L256">        authUser.authTarget(oldEntity.getApp(), PrivilegeType.DELETE_RULE);</span>
+        try {
+<span class="nc" id="L258">            repository.delete(id);</span>
+<span class="nc" id="L259">        } catch (Throwable throwable) {</span>
+<span class="nc" id="L260">            logger.error(&quot;delete error:&quot;, throwable);</span>
+<span class="nc" id="L261">            return Result.ofThrowable(-1, throwable);</span>
+<span class="nc" id="L262">        }</span>
+<span class="nc bnc" id="L263" title="All 2 branches missed.">        if (!publishRules(oldEntity.getApp(), oldEntity.getIp(), oldEntity.getPort())) {</span>
+<span class="nc" id="L264">            logger.info(&quot;publish system rules fail after rule delete&quot;);</span>
+        }
+<span class="nc" id="L266">        return Result.ofSuccess(id);</span>
+    }
+
+    private boolean publishRules(String app, String ip, Integer port) {
+<span class="nc" id="L270">        List&lt;SystemRuleEntity&gt; rules = repository.findAllByMachine(MachineInfo.of(app, ip, port));</span>
+        try{
+<span class="nc" id="L272">            rulePublisher.publish(app,rules);</span>
+<span class="nc" id="L273">        } catch (Exception exception){</span>
+<span class="nc" id="L274">            logger.error(&quot;规则发布到Ncaos出现异常,原因：【{}】&quot;,exception.getMessage(),exception);</span>
+<span class="nc" id="L275">            exception.printStackTrace();</span>
+<span class="nc" id="L276">        }</span>
+<span class="nc" id="L277">        return sentinelApiClient.setSystemRuleOfMachine(app, ip, port, rules);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.3.201901230119</span></div></body></html>

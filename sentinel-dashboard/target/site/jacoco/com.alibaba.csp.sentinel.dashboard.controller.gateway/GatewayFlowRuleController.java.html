@@ -1,0 +1,444 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>GatewayFlowRuleController.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">sentinel-dashboard</a> &gt; <a href="index.source.html" class="el_package">com.alibaba.csp.sentinel.dashboard.controller.gateway</a> &gt; <span class="el_source">GatewayFlowRuleController.java</span></div><h1>GatewayFlowRuleController.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 1999-2018 Alibaba Group Holding Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package com.alibaba.csp.sentinel.dashboard.controller.gateway;
+
+
+import com.alibaba.csp.sentinel.dashboard.auth.AuthService;
+import com.alibaba.csp.sentinel.dashboard.client.SentinelApiClient;
+import com.alibaba.csp.sentinel.dashboard.datasource.entity.gateway.GatewayFlowRuleEntity;
+import com.alibaba.csp.sentinel.dashboard.datasource.entity.gateway.GatewayParamFlowItemEntity;
+import com.alibaba.csp.sentinel.dashboard.discovery.MachineInfo;
+import com.alibaba.csp.sentinel.dashboard.domain.Result;
+import com.alibaba.csp.sentinel.dashboard.domain.vo.gateway.rule.AddFlowRuleReqVo;
+import com.alibaba.csp.sentinel.dashboard.domain.vo.gateway.rule.GatewayParamFlowItemVo;
+import com.alibaba.csp.sentinel.dashboard.domain.vo.gateway.rule.UpdateFlowRuleReqVo;
+import com.alibaba.csp.sentinel.dashboard.repository.gateway.InMemGatewayFlowRuleStore;
+import com.alibaba.csp.sentinel.util.StringUtil;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.*;
+
+import javax.servlet.http.HttpServletRequest;
+import java.util.Arrays;
+import java.util.Date;
+import java.util.List;
+
+import static com.alibaba.csp.sentinel.slots.block.RuleConstant.*;
+import static com.alibaba.csp.sentinel.adapter.gateway.common.SentinelGatewayConstants.*;
+import static com.alibaba.csp.sentinel.dashboard.datasource.entity.gateway.GatewayFlowRuleEntity.*;
+
+/**
+ * Gateway flow rule Controller for manage gateway flow rules.
+ *
+ * @author cdfive
+ * @since 1.7.0
+ */
+@RestController
+@RequestMapping(value = &quot;/gateway/flow&quot;)
+<span class="fc" id="L52">public class GatewayFlowRuleController {</span>
+
+<span class="fc" id="L54">    private final Logger logger = LoggerFactory.getLogger(GatewayFlowRuleController.class);</span>
+
+    @Autowired
+    private InMemGatewayFlowRuleStore repository;
+
+    @Autowired
+    private SentinelApiClient sentinelApiClient;
+
+    @Autowired
+    private AuthService&lt;HttpServletRequest&gt; authService;
+
+    @GetMapping(&quot;/list.json&quot;)
+    public Result&lt;List&lt;GatewayFlowRuleEntity&gt;&gt; queryFlowRules(HttpServletRequest request, String app, String ip, Integer port) {
+<span class="fc" id="L67">        AuthService.AuthUser authUser = authService.getAuthUser(request);</span>
+<span class="fc" id="L68">        authUser.authTarget(app, AuthService.PrivilegeType.READ_RULE);</span>
+
+<span class="pc bpc" id="L70" title="1 of 2 branches missed.">        if (StringUtil.isEmpty(app)) {</span>
+<span class="nc" id="L71">            return Result.ofFail(-1, &quot;app can't be null or empty&quot;);</span>
+        }
+<span class="pc bpc" id="L73" title="1 of 2 branches missed.">        if (StringUtil.isEmpty(ip)) {</span>
+<span class="nc" id="L74">            return Result.ofFail(-1, &quot;ip can't be null or empty&quot;);</span>
+        }
+<span class="pc bpc" id="L76" title="1 of 2 branches missed.">        if (port == null) {</span>
+<span class="nc" id="L77">            return Result.ofFail(-1, &quot;port can't be null&quot;);</span>
+        }
+
+        try {
+<span class="fc" id="L81">            List&lt;GatewayFlowRuleEntity&gt; rules = sentinelApiClient.fetchGatewayFlowRules(app, ip, port).get();</span>
+<span class="fc" id="L82">            repository.saveAll(rules);</span>
+<span class="fc" id="L83">            return Result.ofSuccess(rules);</span>
+<span class="nc" id="L84">        } catch (Throwable throwable) {</span>
+<span class="nc" id="L85">            logger.error(&quot;query gateway flow rules error:&quot;, throwable);</span>
+<span class="nc" id="L86">            return Result.ofThrowable(-1, throwable);</span>
+        }
+    }
+
+    @PostMapping(&quot;/new.json&quot;)
+    public Result&lt;GatewayFlowRuleEntity&gt; addFlowRule(HttpServletRequest request, @RequestBody AddFlowRuleReqVo reqVo) {
+<span class="fc" id="L92">        AuthService.AuthUser authUser = authService.getAuthUser(request);</span>
+
+<span class="fc" id="L94">        String app = reqVo.getApp();</span>
+<span class="pc bpc" id="L95" title="1 of 2 branches missed.">        if (StringUtil.isBlank(app)) {</span>
+<span class="nc" id="L96">            return Result.ofFail(-1, &quot;app can't be null or empty&quot;);</span>
+        }
+
+<span class="fc" id="L99">        authUser.authTarget(app, AuthService.PrivilegeType.WRITE_RULE);</span>
+
+<span class="fc" id="L101">        GatewayFlowRuleEntity entity = new GatewayFlowRuleEntity();</span>
+<span class="fc" id="L102">        entity.setApp(app.trim());</span>
+
+<span class="fc" id="L104">        String ip = reqVo.getIp();</span>
+<span class="pc bpc" id="L105" title="1 of 2 branches missed.">        if (StringUtil.isBlank(ip)) {</span>
+<span class="nc" id="L106">            return Result.ofFail(-1, &quot;ip can't be null or empty&quot;);</span>
+        }
+<span class="fc" id="L108">        entity.setIp(ip.trim());</span>
+
+<span class="fc" id="L110">        Integer port = reqVo.getPort();</span>
+<span class="pc bpc" id="L111" title="1 of 2 branches missed.">        if (port == null) {</span>
+<span class="nc" id="L112">            return Result.ofFail(-1, &quot;port can't be null&quot;);</span>
+        }
+<span class="fc" id="L114">        entity.setPort(port);</span>
+
+        // API类型, Route ID或API分组
+<span class="fc" id="L117">        Integer resourceMode = reqVo.getResourceMode();</span>
+<span class="pc bpc" id="L118" title="1 of 2 branches missed.">        if (resourceMode == null) {</span>
+<span class="nc" id="L119">            return Result.ofFail(-1, &quot;resourceMode can't be null&quot;);</span>
+        }
+<span class="pc bpc" id="L121" title="1 of 2 branches missed.">        if (!Arrays.asList(RESOURCE_MODE_ROUTE_ID, RESOURCE_MODE_CUSTOM_API_NAME).contains(resourceMode)) {</span>
+<span class="nc" id="L122">            return Result.ofFail(-1, &quot;invalid resourceMode: &quot; + resourceMode);</span>
+        }
+<span class="fc" id="L124">        entity.setResourceMode(resourceMode);</span>
+
+        // API名称
+<span class="fc" id="L127">        String resource = reqVo.getResource();</span>
+<span class="pc bpc" id="L128" title="1 of 2 branches missed.">        if (StringUtil.isBlank(resource)) {</span>
+<span class="nc" id="L129">            return Result.ofFail(-1, &quot;resource can't be null or empty&quot;);</span>
+        }
+<span class="fc" id="L131">        entity.setResource(resource.trim());</span>
+
+        // 针对请求属性
+<span class="fc" id="L134">        GatewayParamFlowItemVo paramItem = reqVo.getParamItem();</span>
+<span class="pc bpc" id="L135" title="1 of 2 branches missed.">        if (paramItem != null) {</span>
+<span class="nc" id="L136">            GatewayParamFlowItemEntity itemEntity = new GatewayParamFlowItemEntity();</span>
+<span class="nc" id="L137">            entity.setParamItem(itemEntity);</span>
+
+            // 参数属性 0-ClientIP 1-Remote Host 2-Header 3-URL参数 4-Cookie
+<span class="nc" id="L140">            Integer parseStrategy = paramItem.getParseStrategy();</span>
+<span class="nc" id="L141">            if (!Arrays.asList(PARAM_PARSE_STRATEGY_CLIENT_IP, PARAM_PARSE_STRATEGY_HOST, PARAM_PARSE_STRATEGY_HEADER</span>
+<span class="nc bnc" id="L142" title="All 2 branches missed.">                    , PARAM_PARSE_STRATEGY_URL_PARAM, PARAM_PARSE_STRATEGY_COOKIE).contains(parseStrategy)) {</span>
+<span class="nc" id="L143">                return Result.ofFail(-1, &quot;invalid parseStrategy: &quot; + parseStrategy);</span>
+            }
+<span class="nc" id="L145">            itemEntity.setParseStrategy(paramItem.getParseStrategy());</span>
+
+            // 当参数属性为2-Header 3-URL参数 4-Cookie时，参数名称必填
+<span class="nc bnc" id="L148" title="All 2 branches missed.">            if (Arrays.asList(PARAM_PARSE_STRATEGY_HEADER, PARAM_PARSE_STRATEGY_URL_PARAM, PARAM_PARSE_STRATEGY_COOKIE).contains(parseStrategy)) {</span>
+                // 参数名称
+<span class="nc" id="L150">                String fieldName = paramItem.getFieldName();</span>
+<span class="nc bnc" id="L151" title="All 2 branches missed.">                if (StringUtil.isBlank(fieldName)) {</span>
+<span class="nc" id="L152">                    return Result.ofFail(-1, &quot;fieldName can't be null or empty&quot;);</span>
+                }
+<span class="nc" id="L154">                itemEntity.setFieldName(paramItem.getFieldName());</span>
+
+<span class="nc" id="L156">                String pattern = paramItem.getPattern();</span>
+                // 如果匹配串不为空，验证匹配模式
+<span class="nc bnc" id="L158" title="All 2 branches missed.">                if (StringUtil.isNotEmpty(pattern)) {</span>
+<span class="nc" id="L159">                    itemEntity.setPattern(pattern);</span>
+
+<span class="nc" id="L161">                    Integer matchStrategy = paramItem.getMatchStrategy();</span>
+<span class="nc bnc" id="L162" title="All 2 branches missed.">                    if (!Arrays.asList(PARAM_MATCH_STRATEGY_EXACT, PARAM_MATCH_STRATEGY_CONTAINS, PARAM_MATCH_STRATEGY_REGEX).contains(matchStrategy)) {</span>
+<span class="nc" id="L163">                        return Result.ofFail(-1, &quot;invalid matchStrategy: &quot; + matchStrategy);</span>
+                    }
+<span class="nc" id="L165">                    itemEntity.setMatchStrategy(matchStrategy);</span>
+                }
+            }
+        }
+
+        // 阈值类型 0-线程数 1-QPS
+<span class="fc" id="L171">        Integer grade = reqVo.getGrade();</span>
+<span class="pc bpc" id="L172" title="1 of 2 branches missed.">        if (grade == null) {</span>
+<span class="nc" id="L173">            return Result.ofFail(-1, &quot;grade can't be null&quot;);</span>
+        }
+<span class="pc bpc" id="L175" title="1 of 2 branches missed.">        if (!Arrays.asList(FLOW_GRADE_THREAD, FLOW_GRADE_QPS).contains(grade)) {</span>
+<span class="nc" id="L176">            return Result.ofFail(-1, &quot;invalid grade: &quot; + grade);</span>
+        }
+<span class="fc" id="L178">        entity.setGrade(grade);</span>
+
+        // QPS阈值
+<span class="fc" id="L181">        Double count = reqVo.getCount();</span>
+<span class="pc bpc" id="L182" title="1 of 2 branches missed.">        if (count == null) {</span>
+<span class="nc" id="L183">            return Result.ofFail(-1, &quot;count can't be null&quot;);</span>
+        }
+<span class="pc bpc" id="L185" title="1 of 2 branches missed.">        if (count &lt; 0) {</span>
+<span class="nc" id="L186">            return Result.ofFail(-1, &quot;count should be at lease zero&quot;);</span>
+        }
+<span class="fc" id="L188">        entity.setCount(count);</span>
+
+        // 间隔
+<span class="fc" id="L191">        Long interval = reqVo.getInterval();</span>
+<span class="pc bpc" id="L192" title="1 of 2 branches missed.">        if (interval == null) {</span>
+<span class="nc" id="L193">            return Result.ofFail(-1, &quot;interval can't be null&quot;);</span>
+        }
+<span class="pc bpc" id="L195" title="1 of 2 branches missed.">        if (interval &lt;= 0) {</span>
+<span class="nc" id="L196">            return Result.ofFail(-1, &quot;interval should be greater than zero&quot;);</span>
+        }
+<span class="fc" id="L198">        entity.setInterval(interval);</span>
+
+        // 间隔单位
+<span class="fc" id="L201">        Integer intervalUnit = reqVo.getIntervalUnit();</span>
+<span class="pc bpc" id="L202" title="1 of 2 branches missed.">        if (intervalUnit == null) {</span>
+<span class="nc" id="L203">            return Result.ofFail(-1, &quot;intervalUnit can't be null&quot;);</span>
+        }
+<span class="pc bpc" id="L205" title="1 of 2 branches missed.">        if (!Arrays.asList(INTERVAL_UNIT_SECOND, INTERVAL_UNIT_MINUTE, INTERVAL_UNIT_HOUR, INTERVAL_UNIT_DAY).contains(intervalUnit)) {</span>
+<span class="nc" id="L206">            return Result.ofFail(-1, &quot;Invalid intervalUnit: &quot; + intervalUnit);</span>
+        }
+<span class="fc" id="L208">        entity.setIntervalUnit(intervalUnit);</span>
+
+        // 流控方式 0-快速失败 2-匀速排队
+<span class="fc" id="L211">        Integer controlBehavior = reqVo.getControlBehavior();</span>
+<span class="pc bpc" id="L212" title="1 of 2 branches missed.">        if (controlBehavior == null) {</span>
+<span class="nc" id="L213">            return Result.ofFail(-1, &quot;controlBehavior can't be null&quot;);</span>
+        }
+<span class="pc bpc" id="L215" title="1 of 2 branches missed.">        if (!Arrays.asList(CONTROL_BEHAVIOR_DEFAULT, CONTROL_BEHAVIOR_RATE_LIMITER).contains(controlBehavior)) {</span>
+<span class="nc" id="L216">            return Result.ofFail(-1, &quot;invalid controlBehavior: &quot; + controlBehavior);</span>
+        }
+<span class="fc" id="L218">        entity.setControlBehavior(controlBehavior);</span>
+
+<span class="pc bpc" id="L220" title="1 of 2 branches missed.">        if (CONTROL_BEHAVIOR_DEFAULT == controlBehavior) {</span>
+            // 0-快速失败, 则Burst size必填
+<span class="fc" id="L222">            Integer burst = reqVo.getBurst();</span>
+<span class="pc bpc" id="L223" title="1 of 2 branches missed.">            if (burst == null) {</span>
+<span class="nc" id="L224">                return Result.ofFail(-1, &quot;burst can't be null&quot;);</span>
+            }
+<span class="pc bpc" id="L226" title="1 of 2 branches missed.">            if (burst &lt; 0) {</span>
+<span class="nc" id="L227">                return Result.ofFail(-1, &quot;invalid burst: &quot; + burst);</span>
+            }
+<span class="fc" id="L229">            entity.setBurst(burst);</span>
+<span class="pc bnc" id="L230" title="All 2 branches missed.">        } else if (CONTROL_BEHAVIOR_RATE_LIMITER == controlBehavior) {</span>
+            // 1-匀速排队, 则超时时间必填
+<span class="nc" id="L232">            Integer maxQueueingTimeoutMs = reqVo.getMaxQueueingTimeoutMs();</span>
+<span class="nc bnc" id="L233" title="All 2 branches missed.">            if (maxQueueingTimeoutMs == null) {</span>
+<span class="nc" id="L234">                return Result.ofFail(-1, &quot;maxQueueingTimeoutMs can't be null&quot;);</span>
+            }
+<span class="nc bnc" id="L236" title="All 2 branches missed.">            if (maxQueueingTimeoutMs &lt; 0) {</span>
+<span class="nc" id="L237">                return Result.ofFail(-1, &quot;invalid maxQueueingTimeoutMs: &quot; + maxQueueingTimeoutMs);</span>
+            }
+<span class="nc" id="L239">            entity.setMaxQueueingTimeoutMs(maxQueueingTimeoutMs);</span>
+        }
+
+<span class="fc" id="L242">        Date date = new Date();</span>
+<span class="fc" id="L243">        entity.setGmtCreate(date);</span>
+<span class="fc" id="L244">        entity.setGmtModified(date);</span>
+
+        try {
+<span class="fc" id="L247">            entity = repository.save(entity);</span>
+<span class="nc" id="L248">        } catch (Throwable throwable) {</span>
+<span class="nc" id="L249">            logger.error(&quot;add gateway flow rule error:&quot;, throwable);</span>
+<span class="nc" id="L250">            return Result.ofThrowable(-1, throwable);</span>
+<span class="fc" id="L251">        }</span>
+
+<span class="pc bpc" id="L253" title="1 of 2 branches missed.">        if (!publishRules(app, ip, port)) {</span>
+<span class="nc" id="L254">            logger.warn(&quot;publish gateway flow rules fail after add&quot;);</span>
+        }
+
+<span class="fc" id="L257">        return Result.ofSuccess(entity);</span>
+    }
+
+    @PostMapping(&quot;/save.json&quot;)
+    public Result&lt;GatewayFlowRuleEntity&gt; updateFlowRule(HttpServletRequest request, @RequestBody UpdateFlowRuleReqVo reqVo) {
+<span class="fc" id="L262">        AuthService.AuthUser authUser = authService.getAuthUser(request);</span>
+
+<span class="fc" id="L264">        String app = reqVo.getApp();</span>
+<span class="pc bpc" id="L265" title="1 of 2 branches missed.">        if (StringUtil.isBlank(app)) {</span>
+<span class="nc" id="L266">            return Result.ofFail(-1, &quot;app can't be null or empty&quot;);</span>
+        }
+
+<span class="fc" id="L269">        authUser.authTarget(app, AuthService.PrivilegeType.WRITE_RULE);</span>
+
+<span class="fc" id="L271">        Long id = reqVo.getId();</span>
+<span class="pc bpc" id="L272" title="1 of 2 branches missed.">        if (id == null) {</span>
+<span class="nc" id="L273">            return Result.ofFail(-1, &quot;id can't be null&quot;);</span>
+        }
+
+<span class="fc" id="L276">        GatewayFlowRuleEntity entity = repository.findById(id);</span>
+<span class="pc bpc" id="L277" title="1 of 2 branches missed.">        if (entity == null) {</span>
+<span class="nc" id="L278">            return Result.ofFail(-1, &quot;gateway flow rule does not exist, id=&quot; + id);</span>
+        }
+
+        // 针对请求属性
+<span class="fc" id="L282">        GatewayParamFlowItemVo paramItem = reqVo.getParamItem();</span>
+<span class="pc bpc" id="L283" title="1 of 2 branches missed.">        if (paramItem != null) {</span>
+<span class="fc" id="L284">            GatewayParamFlowItemEntity itemEntity = new GatewayParamFlowItemEntity();</span>
+<span class="fc" id="L285">            entity.setParamItem(itemEntity);</span>
+
+            // 参数属性 0-ClientIP 1-Remote Host 2-Header 3-URL参数 4-Cookie
+<span class="fc" id="L288">            Integer parseStrategy = paramItem.getParseStrategy();</span>
+<span class="fc" id="L289">            if (!Arrays.asList(PARAM_PARSE_STRATEGY_CLIENT_IP, PARAM_PARSE_STRATEGY_HOST, PARAM_PARSE_STRATEGY_HEADER</span>
+<span class="pc bpc" id="L290" title="1 of 2 branches missed.">                    , PARAM_PARSE_STRATEGY_URL_PARAM, PARAM_PARSE_STRATEGY_COOKIE).contains(parseStrategy)) {</span>
+<span class="nc" id="L291">                return Result.ofFail(-1, &quot;invalid parseStrategy: &quot; + parseStrategy);</span>
+            }
+<span class="fc" id="L293">            itemEntity.setParseStrategy(paramItem.getParseStrategy());</span>
+
+            // 当参数属性为2-Header 3-URL参数 4-Cookie时，参数名称必填
+<span class="pc bpc" id="L296" title="1 of 2 branches missed.">            if (Arrays.asList(PARAM_PARSE_STRATEGY_HEADER, PARAM_PARSE_STRATEGY_URL_PARAM, PARAM_PARSE_STRATEGY_COOKIE).contains(parseStrategy)) {</span>
+                // 参数名称
+<span class="fc" id="L298">                String fieldName = paramItem.getFieldName();</span>
+<span class="pc bpc" id="L299" title="1 of 2 branches missed.">                if (StringUtil.isBlank(fieldName)) {</span>
+<span class="nc" id="L300">                    return Result.ofFail(-1, &quot;fieldName can't be null or empty&quot;);</span>
+                }
+<span class="fc" id="L302">                itemEntity.setFieldName(paramItem.getFieldName());</span>
+
+<span class="fc" id="L304">                String pattern = paramItem.getPattern();</span>
+                // 如果匹配串不为空，验证匹配模式
+<span class="pc bpc" id="L306" title="1 of 2 branches missed.">                if (StringUtil.isNotEmpty(pattern)) {</span>
+<span class="nc" id="L307">                    itemEntity.setPattern(pattern);</span>
+
+<span class="nc" id="L309">                    Integer matchStrategy = paramItem.getMatchStrategy();</span>
+<span class="nc bnc" id="L310" title="All 2 branches missed.">                    if (!Arrays.asList(PARAM_MATCH_STRATEGY_EXACT, PARAM_MATCH_STRATEGY_CONTAINS, PARAM_MATCH_STRATEGY_REGEX).contains(matchStrategy)) {</span>
+<span class="nc" id="L311">                        return Result.ofFail(-1, &quot;invalid matchStrategy: &quot; + matchStrategy);</span>
+                    }
+<span class="nc" id="L313">                    itemEntity.setMatchStrategy(matchStrategy);</span>
+                }
+            }
+<span class="fc" id="L316">        } else {</span>
+<span class="nc" id="L317">            entity.setParamItem(null);</span>
+        }
+
+        // 阈值类型 0-线程数 1-QPS
+<span class="fc" id="L321">        Integer grade = reqVo.getGrade();</span>
+<span class="pc bpc" id="L322" title="1 of 2 branches missed.">        if (grade == null) {</span>
+<span class="nc" id="L323">            return Result.ofFail(-1, &quot;grade can't be null&quot;);</span>
+        }
+<span class="pc bpc" id="L325" title="1 of 2 branches missed.">        if (!Arrays.asList(FLOW_GRADE_THREAD, FLOW_GRADE_QPS).contains(grade)) {</span>
+<span class="nc" id="L326">            return Result.ofFail(-1, &quot;invalid grade: &quot; + grade);</span>
+        }
+<span class="fc" id="L328">        entity.setGrade(grade);</span>
+
+        // QPS阈值
+<span class="fc" id="L331">        Double count = reqVo.getCount();</span>
+<span class="pc bpc" id="L332" title="1 of 2 branches missed.">        if (count == null) {</span>
+<span class="nc" id="L333">            return Result.ofFail(-1, &quot;count can't be null&quot;);</span>
+        }
+<span class="pc bpc" id="L335" title="1 of 2 branches missed.">        if (count &lt; 0) {</span>
+<span class="nc" id="L336">            return Result.ofFail(-1, &quot;count should be at lease zero&quot;);</span>
+        }
+<span class="fc" id="L338">        entity.setCount(count);</span>
+
+        // 间隔
+<span class="fc" id="L341">        Long interval = reqVo.getInterval();</span>
+<span class="pc bpc" id="L342" title="1 of 2 branches missed.">        if (interval == null) {</span>
+<span class="nc" id="L343">            return Result.ofFail(-1, &quot;interval can't be null&quot;);</span>
+        }
+<span class="pc bpc" id="L345" title="1 of 2 branches missed.">        if (interval &lt;= 0) {</span>
+<span class="nc" id="L346">            return Result.ofFail(-1, &quot;interval should be greater than zero&quot;);</span>
+        }
+<span class="fc" id="L348">        entity.setInterval(interval);</span>
+
+        // 间隔单位
+<span class="fc" id="L351">        Integer intervalUnit = reqVo.getIntervalUnit();</span>
+<span class="pc bpc" id="L352" title="1 of 2 branches missed.">        if (intervalUnit == null) {</span>
+<span class="nc" id="L353">            return Result.ofFail(-1, &quot;intervalUnit can't be null&quot;);</span>
+        }
+<span class="pc bpc" id="L355" title="1 of 2 branches missed.">        if (!Arrays.asList(INTERVAL_UNIT_SECOND, INTERVAL_UNIT_MINUTE, INTERVAL_UNIT_HOUR, INTERVAL_UNIT_DAY).contains(intervalUnit)) {</span>
+<span class="nc" id="L356">            return Result.ofFail(-1, &quot;Invalid intervalUnit: &quot; + intervalUnit);</span>
+        }
+<span class="fc" id="L358">        entity.setIntervalUnit(intervalUnit);</span>
+
+        // 流控方式 0-快速失败 2-匀速排队
+<span class="fc" id="L361">        Integer controlBehavior = reqVo.getControlBehavior();</span>
+<span class="pc bpc" id="L362" title="1 of 2 branches missed.">        if (controlBehavior == null) {</span>
+<span class="nc" id="L363">            return Result.ofFail(-1, &quot;controlBehavior can't be null&quot;);</span>
+        }
+<span class="pc bpc" id="L365" title="1 of 2 branches missed.">        if (!Arrays.asList(CONTROL_BEHAVIOR_DEFAULT, CONTROL_BEHAVIOR_RATE_LIMITER).contains(controlBehavior)) {</span>
+<span class="nc" id="L366">            return Result.ofFail(-1, &quot;invalid controlBehavior: &quot; + controlBehavior);</span>
+        }
+<span class="fc" id="L368">        entity.setControlBehavior(controlBehavior);</span>
+
+<span class="pc bpc" id="L370" title="1 of 2 branches missed.">        if (CONTROL_BEHAVIOR_DEFAULT == controlBehavior) {</span>
+            // 0-快速失败, 则Burst size必填
+<span class="nc" id="L372">            Integer burst = reqVo.getBurst();</span>
+<span class="nc bnc" id="L373" title="All 2 branches missed.">            if (burst == null) {</span>
+<span class="nc" id="L374">                return Result.ofFail(-1, &quot;burst can't be null&quot;);</span>
+            }
+<span class="nc bnc" id="L376" title="All 2 branches missed.">            if (burst &lt; 0) {</span>
+<span class="nc" id="L377">                return Result.ofFail(-1, &quot;invalid burst: &quot; + burst);</span>
+            }
+<span class="nc" id="L379">            entity.setBurst(burst);</span>
+<span class="pc bpc" id="L380" title="1 of 2 branches missed.">        } else if (CONTROL_BEHAVIOR_RATE_LIMITER == controlBehavior) {</span>
+            // 2-匀速排队, 则超时时间必填
+<span class="fc" id="L382">            Integer maxQueueingTimeoutMs = reqVo.getMaxQueueingTimeoutMs();</span>
+<span class="pc bpc" id="L383" title="1 of 2 branches missed.">            if (maxQueueingTimeoutMs == null) {</span>
+<span class="nc" id="L384">                return Result.ofFail(-1, &quot;maxQueueingTimeoutMs can't be null&quot;);</span>
+            }
+<span class="pc bpc" id="L386" title="1 of 2 branches missed.">            if (maxQueueingTimeoutMs &lt; 0) {</span>
+<span class="nc" id="L387">                return Result.ofFail(-1, &quot;invalid maxQueueingTimeoutMs: &quot; + maxQueueingTimeoutMs);</span>
+            }
+<span class="fc" id="L389">            entity.setMaxQueueingTimeoutMs(maxQueueingTimeoutMs);</span>
+        }
+
+<span class="fc" id="L392">        Date date = new Date();</span>
+<span class="fc" id="L393">        entity.setGmtModified(date);</span>
+
+        try {
+<span class="fc" id="L396">            entity = repository.save(entity);</span>
+<span class="nc" id="L397">        } catch (Throwable throwable) {</span>
+<span class="nc" id="L398">            logger.error(&quot;update gateway flow rule error:&quot;, throwable);</span>
+<span class="nc" id="L399">            return Result.ofThrowable(-1, throwable);</span>
+<span class="fc" id="L400">        }</span>
+
+<span class="pc bpc" id="L402" title="1 of 2 branches missed.">        if (!publishRules(app, entity.getIp(), entity.getPort())) {</span>
+<span class="nc" id="L403">            logger.warn(&quot;publish gateway flow rules fail after update&quot;);</span>
+        }
+
+<span class="fc" id="L406">        return Result.ofSuccess(entity);</span>
+    }
+
+
+    @PostMapping(&quot;/delete.json&quot;)
+    public Result&lt;Long&gt; deleteFlowRule(HttpServletRequest request, Long id) {
+<span class="fc" id="L412">        AuthService.AuthUser authUser = authService.getAuthUser(request);</span>
+
+<span class="pc bpc" id="L414" title="1 of 2 branches missed.">        if (id == null) {</span>
+<span class="nc" id="L415">            return Result.ofFail(-1, &quot;id can't be null&quot;);</span>
+        }
+
+<span class="fc" id="L418">        GatewayFlowRuleEntity oldEntity = repository.findById(id);</span>
+<span class="pc bpc" id="L419" title="1 of 2 branches missed.">        if (oldEntity == null) {</span>
+<span class="nc" id="L420">            return Result.ofSuccess(null);</span>
+        }
+
+<span class="fc" id="L423">        authUser.authTarget(oldEntity.getApp(), AuthService.PrivilegeType.DELETE_RULE);</span>
+
+        try {
+<span class="fc" id="L426">            repository.delete(id);</span>
+<span class="nc" id="L427">        } catch (Throwable throwable) {</span>
+<span class="nc" id="L428">            logger.error(&quot;delete gateway flow rule error:&quot;, throwable);</span>
+<span class="nc" id="L429">            return Result.ofThrowable(-1, throwable);</span>
+<span class="fc" id="L430">        }</span>
+
+<span class="pc bpc" id="L432" title="1 of 2 branches missed.">        if (!publishRules(oldEntity.getApp(), oldEntity.getIp(), oldEntity.getPort())) {</span>
+<span class="nc" id="L433">            logger.warn(&quot;publish gateway flow rules fail after delete&quot;);</span>
+        }
+
+<span class="fc" id="L436">        return Result.ofSuccess(id);</span>
+    }
+
+    private boolean publishRules(String app, String ip, Integer port) {
+<span class="fc" id="L440">        List&lt;GatewayFlowRuleEntity&gt; rules = repository.findAllByMachine(MachineInfo.of(app, ip, port));</span>
+<span class="fc" id="L441">        return sentinelApiClient.modifyGatewayFlowRules(app, ip, port, rules);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.3.201901230119</span></div></body></html>

@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>RuleTypeEnum.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">sentinel-dashboard</a> &gt; <a href="index.source.html" class="el_package">com.alibaba.csp.sentinel.dashboard.rule.nacos</a> &gt; <span class="el_source">RuleTypeEnum.java</span></div><h1>RuleTypeEnum.java</h1><pre class="source lang-java linenums">package com.alibaba.csp.sentinel.dashboard.rule.nacos;
+
+
+<span class="nc" id="L4">public enum RuleTypeEnum {</span>
+
+    /**
+     * 规则类型枚举
+     */
+<span class="nc" id="L9">    FLOW(&quot;flow&quot;,&quot;流控规则&quot;,0),</span>
+<span class="nc" id="L10">    DEGRADE(&quot;degrade&quot;,&quot;降级规则&quot;,1),</span>
+<span class="nc" id="L11">    PARAMS(&quot;params&quot;,&quot;热点规则&quot;,2),</span>
+<span class="nc" id="L12">    SYSTEM(&quot;system&quot;,&quot;系统规则&quot;,3),</span>
+<span class="nc" id="L13">    AUTHORITY(&quot;authority&quot;,&quot;授权规则&quot;,4)</span>
+    ;
+
+    private final String postfix;
+    private final String description;
+    private final int code;
+
+<span class="nc" id="L20">    RuleTypeEnum (String postfix, String description, int code){</span>
+<span class="nc" id="L21">        this.postfix = postfix;</span>
+<span class="nc" id="L22">        this.description = description;</span>
+<span class="nc" id="L23">        this.code = code;</span>
+<span class="nc" id="L24">    }</span>
+
+    public String getPostfix (){
+<span class="nc" id="L27">        return postfix;</span>
+    }
+
+    public String getDescription (){
+<span class="nc" id="L31">        return description;</span>
+    }
+
+    public int getCode (){
+<span class="nc" id="L35">        return code;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.3.201901230119</span></div></body></html>
